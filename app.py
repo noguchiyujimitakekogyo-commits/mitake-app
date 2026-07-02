@@ -760,9 +760,9 @@ with tab3:
         project_names = list(projects_db.keys())
        
         if doc_type == "営業計算書（新規物件登録）":
-            confirm_proj = st.text_input("新規物件名", value=data.get("物件名", ""))
-            confirm_client = st.text_input("顧客名", value=data.get("顧客名", ""))
-            confirm_num = st.text_input("物件番号", value=data.get("物件番号", ""))
+            confirm_proj = st.text_input("新規物件名", value=data.get("物件名", ""), key="ai_proj_name")
+            confirm_client = st.text_input("顧客名", value=data.get("顧客名", ""), key="ai_client_name")
+            confirm_num = st.text_input("物件番号", value=data.get("物件番号", ""), key="ai_proj_num")
            
             guessed_term = "57期"
             if confirm_num and confirm_num[:2].isdigit():
@@ -770,13 +770,13 @@ with tab3:
                 if term_str in YEAR_LIST:
                     guessed_term = term_str
                    
-            confirm_year = st.selectbox("対象の期", YEAR_LIST, index=YEAR_LIST.index(guessed_term))
+            confirm_year = st.selectbox("対象の期", YEAR_LIST, index=YEAR_LIST.index(guessed_term), key="ai_proj_year")
            
             ai_cat = data.get("分類", "")
             guessed_cat = "未設定"
             if "外食" in ai_cat or "カフェ" in ai_cat: guessed_cat = "飲食(その他)"
             if "アパレル" in ai_cat: guessed_cat = "アパレル"
-            confirm_cat = st.selectbox("ジャンル", CATEGORY_LIST, index=CATEGORY_LIST.index(guessed_cat) if guessed_cat in CATEGORY_LIST else 0)
+            confirm_cat = st.selectbox("ジャンル", CATEGORY_LIST, index=CATEGORY_LIST.index(guessed_cat) if guessed_cat in CATEGORY_LIST else 0, key="ai_proj_cat")
            
             if st.button("🚀 この営業計算書から新規物件を自動作成する", type="primary"):
                 if confirm_proj and confirm_proj not in projects_db:
@@ -796,7 +796,7 @@ with tab3:
                     st.error("その物件名はすでに登録されています。別の名前をご入力ください。")
                 else:
                     st.error("物件名を入力してください。")
- 
+
         elif doc_type == "発注書":
             selected_proj = st.selectbox("紐付ける物件名", ["(選択してください)"] + project_names)
             confirm_client = st.text_input("顧客名", value=data.get("顧客名", ""))
