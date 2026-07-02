@@ -4,7 +4,7 @@ import base64
 import os
 import json
 import re
-
+ 
 # 画面をワイドに使う設定（※必ずst.writeなどより上に書く必要があります）
 st.set_page_config(layout="wide", page_title="MITAKE 社内管理アプリ")
  
@@ -26,19 +26,41 @@ st.markdown("""
 """, unsafe_allow_html=True)
  
 # ==========================================
-# 🔑 APIキーの設定（取得したキーを貼り付けてください）
+# 🔑 APIキーの設定
 # ==========================================
-GEMINI_API_KEY = "ここに取得したAPIキーを貼り付けてください。"
- 
+try:
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+except:
+    GEMINI_API_KEY = "YOUR_KEY_HERE"
+
 # AIライブラリの読み込み
 try:
     import google.generativeai as genai
     from PIL import Image
-    if GEMINI_API_KEY != "ここに取得したAPIキーを貼り付けてください":
+    if GEMINI_API_KEY != "YOUR_KEY_HERE":
         genai.configure(api_key=GEMINI_API_KEY)
 except ImportError:
-    st.error("⚠️ AI機能を使うためのライブラリが不足しています。ターミナルで `python -m pip install google-generativeai pillow` を実行してください。")
- 
+    st.error("⚠️ AI機能を使うためのライブラリが不足しています。")
+
+
+
+# ==========================================
+# ⚡ 爆速化のための記憶（キャッシュ）設定
+# ==========================================
+@st.cache_data(ttl=600) # スプレッドシートのデータを10分間記憶する
+def load_csv_data(url):
+    try:
+        return pd.read_csv(url)
+    except:
+        return pd.DataFrame()
+
+@st.cache_data # エクセルデータを記憶する
+def load_excel_data(path):
+    try:
+        return pd.read_excel(path, sheet_name=0, header=None)
+    except:
+        return pd.DataFrame()
+
 st.title("MITAKE 社内管理アプリ")
  
 # ==========================================
@@ -230,14 +252,14 @@ with tab1:
             p_cost = sum(safe_num(x.get("協力業者支払")) for c in ["detail_a", "detail_b", "detail_c", "detail_d"] for x in p_data.get(c, []))
             term_summary[p_year]["売上"] += p_sales
             term_summary[p_year]["利益"] += (p_sales - p_cost)
-
+ 
     df_term_graph = pd.DataFrame([
         {"期": year, "売上": term_summary[year]["売上"], "利益": term_summary[year]["利益"]}
         for year in YEAR_LIST
     ]).set_index("期")
     st.bar_chart(df_term_graph)
     st.markdown("---")
-
+ 
     summary_placeholder = st.container()
     st.markdown("---")
    
@@ -267,7 +289,7 @@ with tab1:
                     if "gid=" in s_url:
                         gid = s_url.split("gid=")[1].split("&")[0]
                         csv_url += f"&gid={gid}"
-                    df_att = pd.read_csv(csv_url)
+                    df_att = load_csv_data(csv_url) # ⚡ ここをキャッシュ化！
                     for dept in ["staff_setsubi", "staff_naisou", "staff_denki", "staff_pm"]:
                         for staff in p_data.get(dept, []):
                             h_str = get_hours_for_staff(df_att, staff, p_name)
@@ -405,7 +427,7 @@ with tab1:
                     if "gid=" in s_url:
                         gid = s_url.split("gid=")[1].split("&")[0]
                         csv_url += f"&gid={gid}"
-                    df_att = pd.read_csv(csv_url)
+                    df_att = load_csv_data(csv_url) # ⚡ ここをキャッシュ化！
                     h_str = get_hours_for_staff(df_att, selected_staff, p_name)
                     staff_hours = float(h_str.replace(" h", ""))
             except:
@@ -583,7 +605,7 @@ with tab2:
                     if "gid=" in in_sheet_url:
                         gid = in_sheet_url.split("gid=")[1].split("&")[0]
                         csv_url += f"&gid={gid}"
-                    df_attendance = pd.read_csv(csv_url)
+                    df_attendance = load_csv_data(csv_url) # ⚡ ここをキャッシュ化！
             except:
                 st.warning("⚠️ 勤怠スプレッドシートの自動読み取りが出来ませんでした。共有設定を確認してください。")
  
@@ -754,7 +776,7 @@ with tab3:
             guessed_cat = "未設定"
             if "外食" in ai_cat or "カフェ" in ai_cat: guessed_cat = "飲食(その他)"
             if "アパレル" in ai_cat: guessed_cat = "アパレル"
-            confirm_cat = st.selectbox("ジャンル", CATEGORY_LIST, key="confirm_cat_unique",index=CATEGORY_LIST.index(guessed_cat) if guessed_cat in CATEGORY_LIST else 0)
+            confirm_cat = st.selectbox("ジャンル", CATEGORY_LIST, index=CATEGORY_LIST.index(guessed_cat) if guessed_cat in CATEGORY_LIST else 0)
            
             if st.button("🚀 この営業計算書から新規物件を自動作成する", type="primary"):
                 if confirm_proj and confirm_proj not in projects_db:
@@ -933,7 +955,7 @@ with tab4:
            
         if os.path.exists(PAST_EXCEL_PATH):
             try:
-                df_past = pd.read_excel(PAST_EXCEL_PATH, sheet_name=0, header=None)
+                df_past = load_excel_data(PAST_EXCEL_PATH) # ⚡ ここもキャッシュ化！
                 st.markdown("**保存されている過去データ（プレビュー）**")
                 df_past_display = df_past.fillna("").astype(str)
                 st.dataframe(df_past_display, use_container_width=True, height=250)
@@ -963,7 +985,7 @@ with tab4:
                         if match and current_client != "未設定" and current_client != "スキップ":
                             term_str = match.group(1)
                             data_row = i + 1
-                            
+                           
                             if data_row >= len(df_past): continue
                            
                             month_data_found = False
@@ -1049,5 +1071,5 @@ with tab4:
                         st.info("新しく登録できるデータは見つかりませんでした。")
                        
             except Exception as e:
-                st.error(f"Excelの読み込みに失敗しました: {e}")
+                st.error(f"Excelの読み込みに失敗しました: {e}") 
 
