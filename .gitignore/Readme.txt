@@ -1,0 +1,2 @@
+mitake-app-*.json
+.env
