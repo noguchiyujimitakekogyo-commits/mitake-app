@@ -3,13 +3,16 @@ import streamlit as st
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
+from datetime import datetime
 
 # --- Firestoreの初期化 ---
 if not firebase_admin._apps:
-    if "FIREBASE_JSON" in st.secrets:
-        key_dict = json.loads(st.secrets["FIREBASE_JSON"])
+    if "firebase" in st.secrets:
+        # TOMLのテーブル形式([firebase])から安全に辞書として読み込む
+        key_dict = dict(st.secrets["firebase"])
         cred = credentials.Certificate(key_dict)
     else:
+        # ローカル環境用
         cred = credentials.Certificate("serviceAccountKey.json")
     firebase_admin.initialize_app(cred)
 
@@ -64,10 +67,6 @@ def load_projects():
 
 def save_project_to_db(p_name, p_data):
     db.collection("projects").document(p_name).set(p_data)
-# utils/backup.py (または utils/db_client.py に追記)
-import json
-import streamlit as st
-from datetime import datetime
 
 def convert_firestore_types(data):
     if isinstance(data, dict):
