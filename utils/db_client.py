@@ -5,19 +5,47 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 from datetime import datetime
 
-# --- Firestoreの初期化 ---
+# --- Firestoreの初期化（完全堅牢版） ---
 if not firebase_admin._apps:
+    key_dict = None
+    
+    # 1. TOMLテーブル形式 ([firebase]) が設定されている場合
     if "firebase" in st.secrets:
-        # TOMLから辞書として読み込む
-        key_dict = dict(st.secrets["firebase"])
-        # 秘密鍵の \n が文字列になっている場合を考慮して実際の改行に置換する
-        if "private_key" in key_dict:
-            key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+        try:
+            key_dict = dict(st.secrets["firebase"])
+        except Exception:
+            pass
+
+    # 2. JSON文字列形式 (FIREBASE_JSON) が設定されている場合
+    if not key_dict and "FIREBASE_JSON" in st.secrets:
+        try:
+            val = st.secrets["FIREBASE_JSON"]
+            if isinstance(val, str):
+                key_dict = json.loads(val)
+            elif isinstance(val, dict):
+                key_dict = val
+        except Exception:
+            pass
+
+    # 3. どちらも見つからない場合はローカルファイルを試す
+    if not key_dict:
+        try:
+            with open("serviceAccountKey.json", "r", encoding="utf-8") as f:
+                key_dict = json.load(f)
+        except Exception:
+            pass
+
+    # 秘密鍵の改行エスケープを自動で綺麗に整える
+    if key_dict and "private_key" in key_dict:
+        pk = str(key_dict["private_key"])
+        pk = pk.replace("\\n", "\n")
+        key_dict["private_key"] = pk
+
+    if key_dict:
         cred = credentials.Certificate(key_dict)
+        firebase_admin.initialize_app(cred)
     else:
-        # ローカル環境用
-        cred = credentials.Certificate("serviceAccountKey.json")
-    firebase_admin.initialize_app(cred)
+        raise ValueError("Firebaseの認証情報が見つかりません。StreamlitのSecretsを確認してください。")
 
 db = firestore.client()
 
