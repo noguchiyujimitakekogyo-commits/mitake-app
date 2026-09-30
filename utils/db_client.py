@@ -8,8 +8,11 @@ from datetime import datetime
 # --- Firestoreの初期化 ---
 if not firebase_admin._apps:
     if "firebase" in st.secrets:
-        # TOMLのテーブル形式([firebase])から安全に辞書として読み込む
+        # TOMLから辞書として読み込む
         key_dict = dict(st.secrets["firebase"])
+        # 秘密鍵の \n が文字列になっている場合を考慮して実際の改行に置換する
+        if "private_key" in key_dict:
+            key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
         cred = credentials.Certificate(key_dict)
     else:
         # ローカル環境用
