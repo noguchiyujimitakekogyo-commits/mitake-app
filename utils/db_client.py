@@ -5,35 +5,41 @@ from firebase_admin import firestore
 import json
 from datetime import datetime
 
-# --- Firestoreの初期化（json.loads完全排除・安全版） ---
+# --- Firestoreの初期化（秘密鍵完全クリーンアップ版） ---
 if not firebase_admin._apps:
     try:
-        # 1. st.secrets["firebase"] (TOMLテーブル形式) がある場合
-        if "firebase" in st.secrets:
-            key_dict = dict(st.secrets["firebase"])
-        # 2. Secretsに直接キーが並んでいる場合
-        elif "project_id" in st.secrets:
-            key_dict = {
-                "type": st.secrets.get("type", "service_account"),
-                "project_id": st.secrets.get("project_id"),
-                "private_key_id": st.secrets.get("private_key_id"),
-                "private_key": st.secrets.get("private_key"),
-                "client_email": st.secrets.get("client_email"),
-                "client_id": st.secrets.get("client_id", ""),
-                "auth_uri": st.secrets.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
-                "token_uri": st.secrets.get("token_uri", "https://oauth2.googleapis.com/token"),
-                "auth_provider_x509_cert_url": st.secrets.get("auth_provider_x509_cert_url", "https://www.googleapis.com/oauth2/v1/certs"),
-                "client_x509_cert_url": st.secrets.get("client_x509_cert_url", ""),
-            }
-        # 3. どちらもない場合はローカルファイルを読む
-        else:
+        # Secrets全体を辞書として安全に取得
+        key_dict = dict(st.secrets)
+        
+        # ローカル環境のファイルがある場合はそちらを優先
+        try:
             with open("serviceAccountKey.json", "r", encoding="utf-8") as f:
                 key_dict = json.load(f)
+        except Exception:
+            pass
 
-        # 秘密鍵の改行エスケープを安全に本物の改行に置換
+        # 秘密鍵（private_key）のフォーマットを徹底的に自動クリーンアップする
         if "private_key" in key_dict:
-            pk = str(key_dict["private_key"])
+            pk = str(key_dict["private_key"]).strip()
+            
+            # 前後の不要なダブルクォートやシングルクォートを完全に削ぎ落とす
+            while (pk.startswith('"') and pk.endswith('"')) or (pk.startswith("'") and pk.endswith("'")):
+                pk = pk[1:-1].strip()
+                
+            # リテラルの "\\n" または実態の改行を安全に整える
             pk = pk.replace("\\n", "\n")
+            
+            # BEGIN と END の間を正しい改行構成に再構築
+            if "BEGIN PRIVATE KEY" in pk and "END PRIVATE KEY" in pk:
+                # 中身の文字列を取り出して綺麗に並べ直す
+                body = pk.replace("-----BEGIN PRIVATE KEY-----", "")
+                body = body.replace("-----END PRIVATE KEY-----", "")
+                # 空白や改行をすべて一度除去
+                body = "".join(body.split())
+                # 64文字ごとに綺麗に改行を入れる（標準的なPEM形式）
+                chunks = [body[i:i+64] for i in range(0, len(body), 64)]
+                pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(chunks) + "\n-----END PRIVATE KEY-----\n"
+                
             key_dict["private_key"] = pk
 
         cred = credentials.Certificate(key_dict)
