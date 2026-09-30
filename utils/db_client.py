@@ -5,7 +5,7 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 from datetime import datetime
 
-# --- Firestoreの初期化（完全堅牢版） ---
+# --- Firestoreの初期化（超・堅牢版） ---
 if not firebase_admin._apps:
     key_dict = None
     
@@ -35,10 +35,25 @@ if not firebase_admin._apps:
         except Exception:
             pass
 
-    # 秘密鍵の改行エスケープを自動で綺麗に整える
+    # 秘密鍵（private_key）のフォーマットを完全に自動修復する
     if key_dict and "private_key" in key_dict:
-        pk = str(key_dict["private_key"])
+        pk = str(key_dict["private_key"]).strip()
+        # 前後の不要なクォートがあれば削る
+        if (pk.startswith('"') and pk.endswith('"')) or (pk.startswith("'") and pk.endswith("'")):
+            pk = pk[1:-1].strip()
+        # リテラルの "\n" を実際の改行に置換
         pk = pk.replace("\\n", "\n")
+        
+        # もし万が一改行が抜けて1行になっている場合の自動補正
+        if "-----BEGIN PRIVATE KEY-----" in pk and "-----END PRIVATE KEY-----" in pk:
+            if "\n" not in pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").strip():
+                # 64文字ごとに改行を入れてPEM形式を再構築する
+                body = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").strip()
+                # スペースや余分な文字を排除
+                body = "".join(body.split())
+                chunks = [body[i:i+64] for i in range(0, len(body), 64)]
+                pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(chunks) + "\n-----END PRIVATE KEY-----\n"
+                
         key_dict["private_key"] = pk
 
     if key_dict:
