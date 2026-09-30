@@ -1,0 +1,7 @@
+streamlit
+pandas
+altair
+Pillow
+google-generativeai
+firebase-admin
+openpyxl
