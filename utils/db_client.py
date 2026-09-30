@@ -1,26 +1,36 @@
-import json
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
+import json
 from datetime import datetime
 
-# --- Firestoreの初期化（改行完全対応版） ---
+# --- Firestoreの初期化（json.loads完全排除・安全版） ---
 if not firebase_admin._apps:
     try:
-        if "FIREBASE_JSON" in st.secrets:
-            secret_val = st.secrets["FIREBASE_JSON"]
-            if isinstance(secret_val, str):
-                key_dict = json.loads(secret_val)
-            else:
-                key_dict = dict(secret_val)
-        elif "firebase" in st.secrets:
+        # 1. st.secrets["firebase"] (TOMLテーブル形式) がある場合
+        if "firebase" in st.secrets:
             key_dict = dict(st.secrets["firebase"])
+        # 2. Secretsに直接キーが並んでいる場合
+        elif "project_id" in st.secrets:
+            key_dict = {
+                "type": st.secrets.get("type", "service_account"),
+                "project_id": st.secrets.get("project_id"),
+                "private_key_id": st.secrets.get("private_key_id"),
+                "private_key": st.secrets.get("private_key"),
+                "client_email": st.secrets.get("client_email"),
+                "client_id": st.secrets.get("client_id", ""),
+                "auth_uri": st.secrets.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
+                "token_uri": st.secrets.get("token_uri", "https://oauth2.googleapis.com/token"),
+                "auth_provider_x509_cert_url": st.secrets.get("auth_provider_x509_cert_url", "https://www.googleapis.com/oauth2/v1/certs"),
+                "client_x509_cert_url": st.secrets.get("client_x509_cert_url", ""),
+            }
+        # 3. どちらもない場合はローカルファイルを読む
         else:
             with open("serviceAccountKey.json", "r", encoding="utf-8") as f:
                 key_dict = json.load(f)
 
-        # 秘密鍵の改行エスケープを確実に本物の改行に置換
+        # 秘密鍵の改行エスケープを安全に本物の改行に置換
         if "private_key" in key_dict:
             pk = str(key_dict["private_key"])
             pk = pk.replace("\\n", "\n")
