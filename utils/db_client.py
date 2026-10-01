@@ -5,54 +5,11 @@ from firebase_admin import firestore
 import json
 from datetime import datetime
 
-# --- Firestoreの初期化（明示的キーマップ＆完全堅牢版） ---
+# --- Firestoreの初期化（ファイル直接読み込み・完全版） ---
 if not firebase_admin._apps:
-    try:
-        # ローカル環境のファイルがある場合はそちらを最優先
-        try:
-            with open("serviceAccountKey.json", "r", encoding="utf-8") as f:
-                key_dict = json.load(f)
-        except Exception:
-            # Streamlit Secretsから安全に取得（テーブル形式とフラット形式の両方に対応）
-            if "firebase" in st.secrets:
-                raw_secret = st.secrets["firebase"]
-            else:
-                raw_secret = st.secrets
-
-            # 必須のキー項目を明示的にマッピングして作成する
-            key_dict = {
-                "type": "service_account",
-                "project_id": str(raw_secret.get("project_id", "mitake-system")),
-                "private_key_id": str(raw_secret.get("private_key_id", "1d46d61fc7d080b80f5ecbadd96c2a61a26f3efb")),
-                "private_key": str(raw_secret.get("private_key", "")),
-                "client_email": str(raw_secret.get("client_email", "firebase-adminsdk-fbsvc@mitake-system.iam.gserviceaccount.com")),
-                "client_id": str(raw_secret.get("client_id", "111355823018768199603")),
-                "auth_uri": str(raw_secret.get("auth_uri", "https://accounts.google.com/o/oauth2/auth")),
-                "token_uri": str(raw_secret.get("token_uri", "https://oauth2.googleapis.com/token")),
-                "auth_provider_x509_cert_url": str(raw_secret.get("auth_provider_x509_cert_url", "https://www.googleapis.com/oauth2/v1/certs")),
-                "client_x509_cert_url": str(raw_secret.get("client_x509_cert_url", "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40mitake-system.iam.gserviceaccount.com")),
-                "universe_domain": str(raw_secret.get("universe_domain", "googleapis.com")),
-            }
-
-        # 秘密鍵（private_key）のフォーマットを徹底的にクリーンアップ
-        if "private_key" in key_dict:
-            pk = key_dict["private_key"].strip()
-            while (pk.startswith('"') and pk.endswith('"')) or (pk.startswith("'") and pk.endswith("'")):
-                pk = pk[1:-1].strip()
-            pk = pk.replace("\\n", "\n")
-            
-            if "BEGIN PRIVATE KEY" in pk and "END PRIVATE KEY" in pk:
-                body = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
-                body = "".join(body.split())
-                chunks = [body[i:i+64] for i in range(0, len(body), 64)]
-                pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(chunks) + "\n-----END PRIVATE KEY-----\n"
-            key_dict["private_key"] = pk
-
-        cred = credentials.Certificate(key_dict)
-        firebase_admin.initialize_app(cred)
-    except Exception as e:
-        st.error(f"Firebase初期化エラー: {e}")
-        raise e
+    # serviceAccountKey.json を直接読み込む（加工なし・エラーなし）
+    cred = credentials.Certificate("serviceAccountKey.json")
+    firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
