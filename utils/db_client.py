@@ -3,40 +3,12 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 import json
-from datetime import datetime
 
-# --- Firestoreの初期化（鍵のゴミ自動排除・完全無敵版） ---
+# --- Firestoreの初期化（オリジナルJSON直接読み込み版） ---
 if not firebase_admin._apps:
     try:
-        fb = st.secrets["firebase"]
-        
-        # 1. 改行文字のエスケープを正常な改行に復元
-        raw_key = fb["private_key"].replace("\\n", "\n")
-        
-        # 2. 鍵の前後に付着した見えないゴミ（extra dataエラーの原因）を物理的に切り落とす
-        start_idx = raw_key.find("-----BEGIN PRIVATE KEY-----")
-        end_idx = raw_key.find("-----END PRIVATE KEY-----")
-        
-        if start_idx != -1 and end_idx != -1:
-            # 純粋な鍵ブロックのみを抽出（余分な空白や引用符を完全に排除）
-            fixed_private_key = raw_key[start_idx : end_idx + len("-----END PRIVATE KEY-----")]
-        else:
-            fixed_private_key = raw_key
-
-        key_dict = {
-            "type": "service_account",
-            "project_id": fb.get("project_id", "mitake-system"),
-            "private_key_id": fb.get("private_key_id", ""),
-            "private_key": fixed_private_key,
-            "client_email": fb.get("client_email", "firebase-adminsdk-fbsvc@mitake-system.iam.gserviceaccount.com"),
-            "client_id": fb.get("client_id", ""),
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40mitake-system.iam.gserviceaccount.com",
-            "universe_domain": "googleapis.com"
-        }
-
+        # Secretsに貼ったオリジナルJSONをそのまま読み込む
+        key_dict = json.loads(st.secrets["FIREBASE_JSON"])
         cred = credentials.Certificate(key_dict)
         firebase_admin.initialize_app(cred)
     except Exception as e:
@@ -102,8 +74,7 @@ def convert_firestore_types(data):
         return [convert_firestore_types(i) for i in data]
     elif hasattr(data, "timestamp"):
         return data.isoformat()
-    else:
-        return data
+    return data
 
 def get_backup_json(db, collection_name):
     docs = db.collection(collection_name).stream()
@@ -112,7 +83,6 @@ def get_backup_json(db, collection_name):
         doc_dict = doc.to_dict()
         doc_dict["_doc_id"] = doc.id
         backup_data.append(convert_firestore_types(doc_dict))
-    
     if not backup_data:
         return None
     return json.dumps(backup_data, ensure_ascii=False, indent=2)
