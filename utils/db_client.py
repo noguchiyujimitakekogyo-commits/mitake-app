@@ -5,21 +5,31 @@ from firebase_admin import firestore
 import json
 from datetime import datetime
 
-# --- Firestoreの初期化（改行トラップ完全回避版） ---
+# --- Firestoreの初期化（鍵のゴミ自動排除・完全無敵版） ---
 if not firebase_admin._apps:
     try:
         fb = st.secrets["firebase"]
         
-        # StreamlitのSecretsで改行がエスケープされてしまう問題（Firebaseトラップ）を修正
-        fixed_private_key = fb["private_key"].replace("\\n", "\n")
+        # 1. 改行文字のエスケープを正常な改行に復元
+        raw_key = fb["private_key"].replace("\\n", "\n")
+        
+        # 2. 鍵の前後に付着した見えないゴミ（extra dataエラーの原因）を物理的に切り落とす
+        start_idx = raw_key.find("-----BEGIN PRIVATE KEY-----")
+        end_idx = raw_key.find("-----END PRIVATE KEY-----")
+        
+        if start_idx != -1 and end_idx != -1:
+            # 純粋な鍵ブロックのみを抽出（余分な空白や引用符を完全に排除）
+            fixed_private_key = raw_key[start_idx : end_idx + len("-----END PRIVATE KEY-----")]
+        else:
+            fixed_private_key = raw_key
 
         key_dict = {
             "type": "service_account",
-            "project_id": fb["project_id"],
-            "private_key_id": fb["private_key_id"],
+            "project_id": fb.get("project_id", "mitake-system"),
+            "private_key_id": fb.get("private_key_id", ""),
             "private_key": fixed_private_key,
-            "client_email": fb["client_email"],
-            "client_id": fb["client_id"],
+            "client_email": fb.get("client_email", "firebase-adminsdk-fbsvc@mitake-system.iam.gserviceaccount.com"),
+            "client_id": fb.get("client_id", ""),
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
