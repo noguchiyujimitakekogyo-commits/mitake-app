@@ -5,41 +5,47 @@ from firebase_admin import firestore
 import json
 from datetime import datetime
 
-# --- Firestoreの初期化（秘密鍵完全クリーンアップ版） ---
+# --- Firestoreの初期化（明示的キーマップ＆完全堅牢版） ---
 if not firebase_admin._apps:
     try:
-        # Secrets全体を辞書として安全に取得
-        key_dict = dict(st.secrets)
-        
-        # ローカル環境のファイルがある場合はそちらを優先
+        # ローカル環境のファイルがある場合はそちらを最優先
         try:
             with open("serviceAccountKey.json", "r", encoding="utf-8") as f:
                 key_dict = json.load(f)
         except Exception:
-            pass
+            # Streamlit Secretsから安全に取得（テーブル形式とフラット形式の両方に対応）
+            if "firebase" in st.secrets:
+                raw_secret = st.secrets["firebase"]
+            else:
+                raw_secret = st.secrets
 
-        # 秘密鍵（private_key）のフォーマットを徹底的に自動クリーンアップする
+            # 必須のキー項目を明示的にマッピングして作成する
+            key_dict = {
+                "type": "service_account",
+                "project_id": str(raw_secret.get("project_id", "mitake-system")),
+                "private_key_id": str(raw_secret.get("private_key_id", "1d46d61fc7d080b80f5ecbadd96c2a61a26f3efb")),
+                "private_key": str(raw_secret.get("private_key", "")),
+                "client_email": str(raw_secret.get("client_email", "firebase-adminsdk-fbsvc@mitake-system.iam.gserviceaccount.com")),
+                "client_id": str(raw_secret.get("client_id", "111355823018768199603")),
+                "auth_uri": str(raw_secret.get("auth_uri", "https://accounts.google.com/o/oauth2/auth")),
+                "token_uri": str(raw_secret.get("token_uri", "https://oauth2.googleapis.com/token")),
+                "auth_provider_x509_cert_url": str(raw_secret.get("auth_provider_x509_cert_url", "https://www.googleapis.com/oauth2/v1/certs")),
+                "client_x509_cert_url": str(raw_secret.get("client_x509_cert_url", "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40mitake-system.iam.gserviceaccount.com")),
+                "universe_domain": str(raw_secret.get("universe_domain", "googleapis.com")),
+            }
+
+        # 秘密鍵（private_key）のフォーマットを徹底的にクリーンアップ
         if "private_key" in key_dict:
-            pk = str(key_dict["private_key"]).strip()
-            
-            # 前後の不要なダブルクォートやシングルクォートを完全に削ぎ落とす
+            pk = key_dict["private_key"].strip()
             while (pk.startswith('"') and pk.endswith('"')) or (pk.startswith("'") and pk.endswith("'")):
                 pk = pk[1:-1].strip()
-                
-            # リテラルの "\\n" または実態の改行を安全に整える
             pk = pk.replace("\\n", "\n")
             
-            # BEGIN と END の間を正しい改行構成に再構築
             if "BEGIN PRIVATE KEY" in pk and "END PRIVATE KEY" in pk:
-                # 中身の文字列を取り出して綺麗に並べ直す
-                body = pk.replace("-----BEGIN PRIVATE KEY-----", "")
-                body = body.replace("-----END PRIVATE KEY-----", "")
-                # 空白や改行をすべて一度除去
+                body = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
                 body = "".join(body.split())
-                # 64文字ごとに綺麗に改行を入れる（標準的なPEM形式）
                 chunks = [body[i:i+64] for i in range(0, len(body), 64)]
                 pk = "-----BEGIN PRIVATE KEY-----\n" + "\n".join(chunks) + "\n-----END PRIVATE KEY-----\n"
-                
             key_dict["private_key"] = pk
 
         cred = credentials.Certificate(key_dict)
